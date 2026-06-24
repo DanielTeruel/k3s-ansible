@@ -1,86 +1,113 @@
-# K3s Cluster con Ansible — Laboratorio de Infraestructura
+# K3s Cluster with Ansible — Infrastructure Lab
 
-Aprovisionamiento automatizado de un clúster Kubernetes multi-nodo (K3s) sobre VMware Workstation con Ansible, despliegue de arquitectura 3 capas, autoscaling, self-healing y observabilidad completa con Prometheus y Grafana.
+Automated provisioning of a multi-node Kubernetes cluster (K3s) on VMware Workstation using Ansible, 
+3-tier application deployment, autoscaling, self-healing and full observability with Prometheus and Grafana.
 
-## Arquitectura
+## Architecture
 
-| Nodo | IP | Rol |
-|------|----|-----|
+| Node | IP | Role |
+|------|----|------|
 | Control Station | 192.168.1.10 | Ubuntu Server — Ansible + kubectl |
 | Master / Control Plane | 192.168.1.11 | K3s server |
 | Worker | 192.168.1.12 | K3s agent |
 
-Red NAT privada bajo VMware Workstation. Gestión push sin contraseña vía SSH + Ansible desde la Control Station.
+Private NAT network under VMware Workstation. Passwordless push management via SSH + Ansible from the Control Station.
 
-## Stack Técnico
+## Tech Stack
 
 - **OS:** Ubuntu Server 24.04 LTS
-- **IaC / Automatización:** Ansible (Playbooks YAML, `inventory.ini`)
-- **Orquestación:** Kubernetes (K3s), Traefik Ingress Controller, local-path provisioner
-- **Red:** Netplan (IPs estáticas), UFW, SSH Keys
+- **IaC / Automation:** Ansible (YAML Playbooks, `inventory.ini`)
+- **Orchestration:** Kubernetes (K3s), Traefik Ingress Controller, local-path provisioner
+- **Networking:** Netplan (static IPs), UFW, SSH Keys
 - **App (namespace `produccion`):** Nginx (frontend), Adminer, MariaDB
-- **Observabilidad:** Prometheus + Grafana (vía Helm)
-- **Pruebas:** Apache Bench (`ab`), inyección de fallos en endpoints
+- **Observability:** Prometheus + Grafana (via Helm)
+- **Load Testing:** Apache Bench (`ab`), endpoint fault injection
 
-## Fases del Proyecto
+## Project Phases
 
-### Fase Previa — IaC con Ansible
-- Configuración de red estática con Netplan y firewall UFW
-- Aprovisionamiento idempotente de los nodos K3s mediante Ansible Playbooks
+### Pre-Phase — IaC with Ansible
+- Static network configuration with Netplan and UFW firewall
+- Idempotent automated provisioning of K3s nodes via Ansible Playbooks
 
-### Fase A — Ingress con Traefik
-- Ingress Resource para tráfico de monitorización
-- Dominio `http://grafana.local` accesible por puerto 80 (sin NodePorts altos)
+### Phase A — Ingress with Traefik
+- Ingress Resource for monitoring traffic routing
+- `http://grafana.local` accessible on port 80 — no high NodePorts
 
-### Fase B + E — Storage, Secrets y ConfigMaps
-- PersistentVolumeClaims con `local-path` provisioner para persistencia de MariaDB
-- Kubernetes Secrets para credenciales de DB; ConfigMaps para configuración Nginx
-- Validado: MariaDB sobrevive eliminación y recreación de pods
+### Phase B + E — Storage, Secrets and ConfigMaps
+- PersistentVolumeClaims with `local-path` provisioner for MariaDB data persistence
+- Kubernetes Secrets for DB credentials; ConfigMaps for Nginx static config
+- Validated: MariaDB survives pod deletion and recreation
 
-### Fase C — Aplicación 3 Capas (namespace `produccion`)
-1. **Frontend:** Nginx declarativo multi-réplica
-2. **Gestión DB:** Adminer
-3. **Backend:** MariaDB con PVC
-- Comunicación interna vía Kubernetes Services
+### Phase C — 3-Tier Application (namespace `produccion`)
+1. **Frontend:** Declarative multi-replica Nginx
+2. **DB Management:** Adminer
+3. **Backend:** MariaDB with PVC
+- Internal communication via Kubernetes Services
 
-### Fase D — HPA (Autoscaling)
-- Horizontal Pod Autoscaler basado en consumo de CPU
-- Validado con `ab -n 100000`: escalado automático de 2 a 10 réplicas al 169% de carga
+### Phase D — HPA (Autoscaling)
+- Horizontal Pod Autoscaler based on CPU consumption
+- Validated with `ab -n 100000`: automatic scale-out from 2 to 10 replicas at 169% CPU load
 
-### Fase F — Liveness y Readiness Probes
-- Probes en pods Nginx para garantizar resiliencia
-- Self-healing validado: inyección de ruta `/error` → fallo de livenessProbe → reinicio automático
+### Phase F — Liveness and Readiness Probes
+- Health probes on Nginx pods for application resilience
+- Self-healing validated: injecting `/error` route → livenessProbe failure → automatic pod restart by Kubernetes
 
-### Fase G — Observabilidad y Alertas
-- Stack Prometheus + Grafana vía Helm
-- Alerta basada en `increase(kube_pod_container_status_restarts_total[5m])`
-- Validado: alerta pasa a `Firing` en tiempo real durante pruebas de estrés
+### Phase G — Observability and Alerting
+- Full Prometheus + Grafana stack via Helm
+- Alert rule based on `increase(kube_pod_container_status_restarts_total[5m])`
+- Validated: alert transitions to `Firing` in real time during stress tests
 
-## Estructura del Repositorio
+## Repository Structure
 k3s-ansible/
 
 ├── ansible/
 
-│   ├── inventory/         # inventory.ini con IPs de los nodos
+│   ├── inventory/         # inventory.ini with node IPs
 
-│   ├── playbooks/         # Playbooks de aprovisionamiento
+│   ├── playbooks/         # Provisioning playbooks
 
-│   └── roles/             # Roles reutilizables
+│   └── roles/             # Reusable roles
 
 ├── k8s/
 
-│   ├── namespace/         # Namespace produccion
+│   ├── namespace/         # produccion namespace definition
 
 │   ├── app/               # Deployments: Nginx, Adminer, MariaDB
 
-│   ├── storage/           # PVC y StorageClass
+│   ├── storage/           # PVC and StorageClass
 
 │   ├── autoscaling/       # HPA
 
-│   ├── probes/            # Liveness y Readiness Probes
+│   ├── probes/            # Liveness and Readiness Probes
 
 │   └── observability/     # Prometheus, Grafana, Ingress
 
 └── docs/
 
-└── architecture.md
+└── architecture.md    # Diagram and technical decisions
+
+## Quick Start
+
+```bash
+# 1. Provision network and firewall on all nodes
+ansible-playbook -i ansible/inventory/inventory.ini ansible/playbooks/setup-network.yml
+
+# 2. Install K3s Control Plane
+ansible-playbook -i ansible/inventory/inventory.ini ansible/playbooks/install-k3s-master.yml
+
+# 3. Join Worker node
+ansible-playbook -i ansible/inventory/inventory.ini ansible/playbooks/install-k3s-worker.yml
+
+# 4. Deploy application stack
+kubectl apply -f k8s/namespace/
+kubectl apply -f k8s/storage/
+kubectl apply -f k8s/app/
+kubectl apply -f k8s/autoscaling/
+kubectl apply -f k8s/observability/
+```
+
+## Certifications & Context
+
+This lab was built as a hands-on complement to the **Microsoft Azure Administrator (AZ-104)** certification,
+covering Kubernetes orchestration, infrastructure-as-code, observability patterns and GitOps principles
+in a local on-premise environment before applying them in cloud-native Azure workloads.
