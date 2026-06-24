@@ -1,5 +1,7 @@
 # K3s Cluster with Ansible — Infrastructure Lab
 
+![Lab Architecture](docs/cover.png)
+
 Automated provisioning of a multi-node Kubernetes cluster (K3s) on VMware Workstation using Ansible, 
 3-tier application deployment, autoscaling, self-healing and full observability with Prometheus and Grafana.
 
