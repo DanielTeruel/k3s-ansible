@@ -1,0 +1,28 @@
+---
+- name: Install K3s on Control Plane
+  hosts: control_plane
+  become: true
+
+  tasks:
+    - name: Download and install K3s server
+      shell: |
+        curl -sfL https://get.k3s.io | sh -s - server \
+          --disable traefik \
+          --write-kubeconfig-mode 644
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for K3s to be ready
+      wait_for:
+        port: 6443
+        host: "{{ ansible_host }}"
+        timeout: 60
+
+    - name: Get K3s node token
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token
+
+    - name: Show token (save this for worker join)
+      debug:
+        msg: "{{ k3s_token.content | b64decode | trim }}"

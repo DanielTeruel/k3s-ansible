@@ -1,0 +1,56 @@
+---
+- name: Configure static network and firewall
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install netplan
+      apt:
+        name: netplan.io
+        state: present
+        update_cache: yes
+
+    - name: Apply static IP configuration
+      template:
+        src: templates/netplan.j2
+        dest: /etc/netplan/00-installer-config.yaml
+        mode: '0600'
+      notify: Apply netplan
+
+    - name: Install UFW
+      apt:
+        name: ufw
+        state: present
+
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Allow Kubernetes API
+      ufw:
+        rule: allow
+        port: '6443'
+        proto: tcp
+
+    - name: Allow Flannel VXLAN
+      ufw:
+        rule: allow
+        port: '8472'
+        proto: udp
+
+    - name: Allow Kubelet metrics
+      ufw:
+        rule: allow
+        port: '10250'
+        proto: tcp
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
+
+  handlers:
+    - name: Apply netplan
+      command: netplan apply

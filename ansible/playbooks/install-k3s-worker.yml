@@ -1,0 +1,29 @@
+---
+- name: Join K3s Worker to cluster
+  hosts: workers
+  become: true
+
+  vars:
+    k3s_master_ip: "192.168.1.11"
+    k3s_token: "REPLACE_WITH_TOKEN_FROM_MASTER"
+
+  tasks:
+    - name: Download and install K3s agent
+      shell: |
+        curl -sfL https://get.k3s.io | K3S_URL=https://{{ k3s_master_ip }}:6443 \
+          K3S_TOKEN={{ k3s_token }} sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Wait for agent to connect
+      pause:
+        seconds: 15
+
+    - name: Verify node joined (run on master)
+      shell: kubectl get nodes
+      delegate_to: master
+      register: nodes_output
+
+    - name: Show cluster nodes
+      debug:
+        msg: "{{ nodes_output.stdout }}"
